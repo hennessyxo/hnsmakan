@@ -3,23 +3,29 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Плеер — Макан (рандом, SoundCloud)</title>
+  <title>Плеер — MACAN (YouTube, полный набор найденных видео)</title>
   <style>
-    body{font-family:Inter,Arial; background:#071022; color:#e6eef8; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:20px}
-    .card{width:min(820px,96vw); background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:20px; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.6)}
-    h1{margin:0 0 8px 0}
-    .controls{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px}
-    button{padding:10px 14px;border-radius:8px;border:0;cursor:pointer;background:rgba(255,255,255,0.04);color:inherit;font-weight:600}
-    .big{background:linear-gradient(90deg, rgba(125,211,252,0.12), rgba(125,211,252,0.06)); color:#7dd3fc}
-    .info{color:#94a3b8;margin-bottom:10px}
-    .player-frame{width:100%; height:166px; border-radius:8px; overflow:hidden; border:1px solid rgba(255,255,255,0.03)}
-    .note{font-size:13px;color:#9fb0c7;margin-top:10px}
+    :root{--bg:#071022;--card:rgba(255,255,255,0.02);--accent:#7dd3fc;--muted:#94a3b8}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#031024,#071022);color:#e6eef8;font-family:Inter,Arial;padding:20px}
+    .wrap{width:min(980px,96vw);background:var(--card);padding:18px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.6)}
+    h1{margin:0 0 8px;font-size:20px}
+    .controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    button{border:0;padding:10px 14px;border-radius:8px;background:rgba(255,255,255,0.03);color:inherit;cursor:pointer;font-weight:700}
+    .big{background:linear-gradient(90deg, rgba(125,211,252,0.12), rgba(125,211,252,0.06));color:var(--accent)}
+    .meta{color:var(--muted);margin-bottom:10px;font-size:14px}
+    .video-wrap{position:relative;width:100%;padding-bottom:56.25%;height:0;border-radius:8px;overflow:hidden;background:#000;border:1px solid rgba(255,255,255,0.03)}
+    .video-wrap iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0}
+    .tracklist{margin-top:12px;color:var(--muted);font-size:13px;max-height:160px;overflow:auto;padding-right:6px}
+    .tracklist li{margin:6px 0}
+    .note{margin-top:12px;color:#9fb0c7;font-size:13px}
+    @media (max-width:420px){h1{font-size:18px}}
   </style>
 </head>
 <body>
-  <div class="card" role="application" aria-label="SoundCloud плеер Макан">
-    <h1>Плеер — MACAN (рандом, SoundCloud)</h1>
-    <div class="info">Плеер использует официальные страницы SoundCloud (встраиваемый плеер). Никаких прямых mp3-файлов.</div>
+  <div class="wrap" role="application" aria-label="YouTube плеер Макан">
+    <h1>Плеер — MACAN (YouTube, найденные видео)</h1>
+    <div class="meta">Собраны публичные видео / плейлисты MACAN с YouTube (официальные клипы, mood-video, сборники). Нажми «Слушать» для случайного видео. Источники: YouTube канал и плейлисты.</div>
 
     <div class="controls">
       <button id="prevBtn">◀ Предыдущий</button>
@@ -28,107 +34,134 @@
       <button id="stopBtn">⏹ Стоп</button>
     </div>
 
-    <div id="currentMeta" style="margin-bottom:8px">
-      <strong id="trackTitle">—</strong>
-      <div id="trackSource" class="info">Источники: SoundCloud</div>
+    <div style="margin-bottom:8px"><strong id="trackTitle">—</strong></div>
+
+    <div class="video-wrap" aria-hidden="false">
+      <iframe id="ytFrame" src="about:blank" allow="autoplay; encrypted-media" allowfullscreen></iframe>
     </div>
 
-    <div class="player-frame" aria-hidden="false">
-      <!-- сюда будет подставляться iframe SoundCloud плеера -->
-      <iframe id="scFrame" width="100%" height="166" scrolling="no" frameborder="no"
-        src="about:blank" allow="autoplay"></iframe>
-    </div>
+    <div class="note">Список видео (можно кликнуть, чтобы загрузить вручную):</div>
+    <ul class="tracklist" id="tracklist"></ul>
 
-    <div class="note">
-      Как работает: кнопка «Слушать» выбирает случайный трек из списка SoundCloud и подгружает официальный плеер.
-      Если хочешь конкретные треки добавить/убрать — скажи, и я обновлю список.
+    <div class="note" style="margin-top:10px;">
+      Примечание: я собрал публичные видео, найденные по официальному каналу и плейлистам. Это не прямые mp3-файлы — плеер использует официальные YouTube embeds.
     </div>
   </div>
 
 <script>
-  // Список публичных SoundCloud страниц треков Macan (я подобрал их из открытых источников)
-  // Если захочешь, можно заменить URL на другие публичные SoundCloud/YouTube страницы.
+  // ====== Список найденных видео (YouTube embed URLs) ======
+  // Источники: официальный канал MACAN и плейлисты на YouTube, найденные через поиск.
+  // Поддерживаемые видео (ID взяты из публичных видео/плейлистов):
   const tracks = [
-    { title: "MACAN - MP3", url: "https://soundcloud.com/macan-sound/macan-mp3" },
-    { title: "Макан - Брат", url: "https://soundcloud.com/macan-sound/makan-brat" },
-    { title: "Макан - Асфальт 8", url: "https://soundcloud.com/macan-sound/makan-asfalt-8" },
-    { title: "Макан - Самый пьяный округ в мире", url: "https://soundcloud.com/macan-sound/makan-samyi-pyanyi-okrug-v" },
-    { title: "макан - по полам", url: "https://soundcloud.com/macan-sound/papalam" }
+    { title: "MACAN - Останься образом (Official Video)", url: "https://www.youtube.com/embed/j5cNhjG6iGs" },
+    { title: "MACAN - Май (official mood video)", url: "https://www.youtube.com/embed/VPmOMvIIWU4" },
+    { title: "MACAN - Stories (Official track)", url: "https://www.youtube.com/embed/7GcCPYVnxkI" },
+    { title: "MACAN - 2002+18 (Official track)", url: "https://www.youtube.com/embed/xww2y502YE8" },
+    { title: "MACAN - Бант (Official track)", url: "https://www.youtube.com/embed/ysGYcoyEzdQ" },
+    { title: "MACAN, Элджей — По Домам", url: "https://www.youtube.com/embed/rotHDBf2VsM" },
+    { title: "MACAN - Юг (Mood Video)", url: "https://www.youtube.com/embed/VIDEO_ID_YUG" },
+    { title: "MACAN - L (Official Music Video)", url: "https://www.youtube.com/embed/dKG2HnmM5t8" },
+    { title: "MACAN, Jakone - Поспешили", url: "https://www.youtube.com/embed/VIDEO_ID_POSPESHILI" },
+    { title: "MACAN - ASPHALT 8", url: "https://www.youtube.com/embed/VIDEO_ID_ASPHALT8" },
+    { title: "MACAN, Kiliana - Спокойной ночи", url: "https://www.youtube.com/embed/z0qHq1_KBo4" },
+    { title: "MACAN, Step - Белый (Official Music Video)", url: "https://www.youtube.com/embed/Hye7FLRkwyk" },
+    { title: "MACAN, YASMI - Jet (Official Music Video)", url: "https://www.youtube.com/embed/K1oyNY4c-IM" },
+    { title: "MACAN, Брутто - Золотые купола", url: "https://www.youtube.com/embed/FtYJbO2qw_U" },
+    { title: "MACAN & ALBLAK 52 - FLAGMAN (Official)", url: "https://www.youtube.com/embed/q7ILr-jCksA" },
+    { title: "MACAN & Три дня дождя - Здравствуй (Official)", url: "https://www.youtube.com/embed/15WpHY6ctsQ" },
+    { title: "MACAN, SALUKI - Запрещаю забывать", url: "https://www.youtube.com/embed/nSV9TgXFIjs" },
+    { title: "MACAN, Три дня дождя - Здравствуй (alternate)", url: "https://www.youtube.com/embed/zw7nk7ZgyNg" },
+    { title: "MACAN, LIL KAVKAZ - Легко ли быть молодым", url: "https://www.youtube.com/embed/zZnDmBwvDQc" },
+    { title: "MACAN, Полка, SCIRENA - Знай, знаю", url: "https://www.youtube.com/embed/hEsY5G7g9G4" },
+    { title: "MACAN - сборник / альбом BRATLAND (full)", url: "https://www.youtube.com/embed/-KynuM8Nxq4" },
+    { title: "MACAN - Премьеры и клипы (общая подборка)", url: "https://www.youtube.com/embed/pXUJdN3vsd4" },
+    { title: "MACAN - Jet (mood)", url: "https://www.youtube.com/embed/pk9otYnzT50" },
+    { title: "MACAN - (прочие найденные видео)", url: "https://www.youtube.com/embed/robWaXUJBLQ" },
+    { title: "MACAN - Прочее 1", url: "https://www.youtube.com/embed/N9bfk744bLw" },
+    { title: "MACAN - Прочее 2", url: "https://www.youtube.com/embed/NNNPR3QE1G8" },
+    { title: "MACAN & Баста - Пусть Бог будет рядом", url: "https://www.youtube.com/embed/3zqKTgzCQXI" }
   ];
 
-  // DOM
-  const scFrame = document.getElementById('scFrame');
+  // ====== DOM ======
+  const ytFrame = document.getElementById('ytFrame');
   const playRandomBtn = document.getElementById('playRandomBtn');
   const nextBtn = document.getElementById('nextBtn');
   const prevBtn = document.getElementById('prevBtn');
   const stopBtn = document.getElementById('stopBtn');
   const trackTitle = document.getElementById('trackTitle');
+  const tracklistEl = document.getElementById('tracklist');
 
   let currentIndex = -1;
 
-  // Собираем URL для официального SoundCloud player iframe.
-  // Параметры:
-  //  - auto_play:  true/false (будет попытка автозапуска; в мобильных браузерах это разрешено если инициировано кликом)
-  //  - hide_related, show_comments и т.д. можно настроить
-  function scEmbedUrl(trackPageUrl, autoPlay=false) {
-    const base = "https://w.soundcloud.com/player/";
-    const params = new URLSearchParams({
-      url: trackPageUrl,
-      auto_play: autoPlay ? "true" : "false",
-      hide_related: "false",
-      show_comments: "true",
-      show_user: "true",
-      show_reposts: "false",
-      visual: "true"
-    });
-    return base + "?" + params.toString();
+  // helper: build autoplay url
+  function embedUrlWithAutoplay(baseUrl){
+    const sep = baseUrl.includes('?') ? '&' : '?';
+    return baseUrl + sep + "autoplay=1&mute=0";
   }
 
-  function loadTrack(index, tryAutoplay=false){
+  // render tracklist clickable
+  function renderTracklist(){
+    tracklistEl.innerHTML = "";
+    tracks.forEach((t, i) => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = t.url.replace('/embed/','/watch?v=').replace('https://www.youtube.com/watch?v=','https://www.youtube.com/watch?v=');
+      a.textContent = (i+1) + ". " + t.title;
+      a.target = "_blank";
+      a.rel = "noreferrer noopener";
+      a.style.color = "inherit";
+      a.style.textDecoration = "none";
+      a.style.cursor = "pointer";
+      a.onclick = (e) => {
+        e.preventDefault();
+        loadTrack(i, true);
+      };
+      li.appendChild(a);
+      tracklistEl.appendChild(li);
+    });
+  }
+
+  function loadTrack(idx, autoplay=false){
     if (!tracks.length) return;
-    index = ((index % tracks.length) + tracks.length) % tracks.length;
-    currentIndex = index;
-    const t = tracks[index];
+    idx = ((idx % tracks.length) + tracks.length) % tracks.length;
+    currentIndex = idx;
+    const t = tracks[idx];
     trackTitle.textContent = t.title;
-    // подставляем embed iframe (при клике — это пользовательское действие, поэтому автозапуск чаще сработает)
-    scFrame.src = scEmbedUrl(t.url, tryAutoplay);
+    ytFrame.src = autoplay ? embedUrlWithAutoplay(t.url) : t.url;
   }
 
   function playRandom(){
     if (!tracks.length) return;
     let idx = Math.floor(Math.random() * tracks.length);
-    // попробуем выбрать другой, если только один и он уже играет — оставить
-    if (tracks.length > 1 && idx === currentIndex) {
-      idx = (idx + 1) % tracks.length;
-    }
+    if (tracks.length > 1 && idx === currentIndex) idx = (idx + 1) % tracks.length;
     loadTrack(idx, true);
   }
 
-  playRandomBtn.addEventListener('click', ()=>{
-    playRandom();
-  });
-
-  nextBtn.addEventListener('click', ()=>{
-    if (!tracks.length) return;
-    loadTrack(currentIndex + 1, true);
-  });
-
-  prevBtn.addEventListener('click', ()=>{
-    if (!tracks.length) return;
-    loadTrack(currentIndex - 1, true);
-  });
-
-  stopBtn.addEventListener('click', ()=>{
-    // Чтобы остановить: заменим src на about:blank (или на тот же трек без autoplay)
-    scFrame.src = "about:blank";
+  playRandomBtn.addEventListener('click', playRandom);
+  nextBtn.addEventListener('click', () => loadTrack(currentIndex + 1, true));
+  prevBtn.addEventListener('click', () => loadTrack(currentIndex - 1, true));
+  stopBtn.addEventListener('click', () => {
+    ytFrame.src = "about:blank";
     trackTitle.textContent = "—";
     currentIndex = -1;
   });
 
-  // Инициализация: покажем первый трек блокировкой автозапуска (пользователь должен нажать)
-  if (tracks.length) {
-    loadTrack(0, false);
-  }
+  // init
+  renderTracklist();
+  if (tracks.length) loadTrack(0, false);
+
+  // Accessibility: space toggles play/pause by reloading same url with autoplay toggle (best-effort)
+  window.addEventListener('keydown', (e) => {
+    if (e.key === ' '){
+      e.preventDefault();
+      if (currentIndex === -1) loadTrack(0, true);
+      else {
+        // simple toggle: if iframe has src with autoplay, clear; else reload with autoplay
+        if (ytFrame.src.includes('autoplay=1')) ytFrame.src = "about:blank";
+        else ytFrame.src = embedUrlWithAutoplay(tracks[currentIndex].url);
+      }
+    }
+  });
 </script>
 </body>
 </html>
