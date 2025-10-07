@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Плеер — Макан (рандом, SoundCloud)</title>
+  <style>
+    body{font-family:Inter,Arial; background:#071022; color:#e6eef8; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:20px}
+    .card{width:min(820px,96vw); background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:20px; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.6)}
+    h1{margin:0 0 8px 0}
+    .controls{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px}
+    button{padding:10px 14px;border-radius:8px;border:0;cursor:pointer;background:rgba(255,255,255,0.04);color:inherit;font-weight:600}
+    .big{background:linear-gradient(90deg, rgba(125,211,252,0.12), rgba(125,211,252,0.06)); color:#7dd3fc}
+    .info{color:#94a3b8;margin-bottom:10px}
+    .player-frame{width:100%; height:166px; border-radius:8px; overflow:hidden; border:1px solid rgba(255,255,255,0.03)}
+    .note{font-size:13px;color:#9fb0c7;margin-top:10px}
+  </style>
+</head>
+<body>
+  <div class="card" role="application" aria-label="SoundCloud плеер Макан">
+    <h1>Плеер — MACAN (рандом, SoundCloud)</h1>
+    <div class="info">Плеер использует официальные страницы SoundCloud (встраиваемый плеер). Никаких прямых mp3-файлов.</div>
+
+    <div class="controls">
+      <button id="prevBtn">◀ Предыдущий</button>
+      <button id="playRandomBtn" class="big">🔀 Слушать (рандом)</button>
+      <button id="nextBtn">Следующий ▶</button>
+      <button id="stopBtn">⏹ Стоп</button>
+    </div>
+
+    <div id="currentMeta" style="margin-bottom:8px">
+      <strong id="trackTitle">—</strong>
+      <div id="trackSource" class="info">Источники: SoundCloud</div>
+    </div>
+
+    <div class="player-frame" aria-hidden="false">
+      <!-- сюда будет подставляться iframe SoundCloud плеера -->
+      <iframe id="scFrame" width="100%" height="166" scrolling="no" frameborder="no"
+        src="about:blank" allow="autoplay"></iframe>
+    </div>
+
+    <div class="note">
+      Как работает: кнопка «Слушать» выбирает случайный трек из списка SoundCloud и подгружает официальный плеер.
+      Если хочешь конкретные треки добавить/убрать — скажи, и я обновлю список.
+    </div>
+  </div>
+
+<script>
+  // Список публичных SoundCloud страниц треков Macan (я подобрал их из открытых источников)
+  // Если захочешь, можно заменить URL на другие публичные SoundCloud/YouTube страницы.
+  const tracks = [
+    { title: "MACAN - MP3", url: "https://soundcloud.com/macan-sound/macan-mp3" },
+    { title: "Макан - Брат", url: "https://soundcloud.com/macan-sound/makan-brat" },
+    { title: "Макан - Асфальт 8", url: "https://soundcloud.com/macan-sound/makan-asfalt-8" },
+    { title: "Макан - Самый пьяный округ в мире", url: "https://soundcloud.com/macan-sound/makan-samyi-pyanyi-okrug-v" },
+    { title: "макан - по полам", url: "https://soundcloud.com/macan-sound/papalam" }
+  ];
+
+  // DOM
+  const scFrame = document.getElementById('scFrame');
+  const playRandomBtn = document.getElementById('playRandomBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const prevBtn = document.getElementById('prevBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const trackTitle = document.getElementById('trackTitle');
+
+  let currentIndex = -1;
+
+  // Собираем URL для официального SoundCloud player iframe.
+  // Параметры:
+  //  - auto_play:  true/false (будет попытка автозапуска; в мобильных браузерах это разрешено если инициировано кликом)
+  //  - hide_related, show_comments и т.д. можно настроить
+  function scEmbedUrl(trackPageUrl, autoPlay=false) {
+    const base = "https://w.soundcloud.com/player/";
+    const params = new URLSearchParams({
+      url: trackPageUrl,
+      auto_play: autoPlay ? "true" : "false",
+      hide_related: "false",
+      show_comments: "true",
+      show_user: "true",
+      show_reposts: "false",
+      visual: "true"
+    });
+    return base + "?" + params.toString();
+  }
+
+  function loadTrack(index, tryAutoplay=false){
+    if (!tracks.length) return;
+    index = ((index % tracks.length) + tracks.length) % tracks.length;
+    currentIndex = index;
+    const t = tracks[index];
+    trackTitle.textContent = t.title;
+    // подставляем embed iframe (при клике — это пользовательское действие, поэтому автозапуск чаще сработает)
+    scFrame.src = scEmbedUrl(t.url, tryAutoplay);
+  }
+
+  function playRandom(){
+    if (!tracks.length) return;
+    let idx = Math.floor(Math.random() * tracks.length);
+    // попробуем выбрать другой, если только один и он уже играет — оставить
+    if (tracks.length > 1 && idx === currentIndex) {
+      idx = (idx + 1) % tracks.length;
+    }
+    loadTrack(idx, true);
+  }
+
+  playRandomBtn.addEventListener('click', ()=>{
+    playRandom();
+  });
+
+  nextBtn.addEventListener('click', ()=>{
+    if (!tracks.length) return;
+    loadTrack(currentIndex + 1, true);
+  });
+
+  prevBtn.addEventListener('click', ()=>{
+    if (!tracks.length) return;
+    loadTrack(currentIndex - 1, true);
+  });
+
+  stopBtn.addEventListener('click', ()=>{
+    // Чтобы остановить: заменим src на about:blank (или на тот же трек без autoplay)
+    scFrame.src = "about:blank";
+    trackTitle.textContent = "—";
+    currentIndex = -1;
+  });
+
+  // Инициализация: покажем первый трек блокировкой автозапуска (пользователь должен нажать)
+  if (tracks.length) {
+    loadTrack(0, false);
+  }
+</script>
+</body>
+</html>
