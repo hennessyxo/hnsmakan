@@ -1,167 +1,476 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Плеер — MACAN (YouTube, полный набор найденных видео)</title>
-  <style>
-    :root{--bg:#071022;--card:rgba(255,255,255,0.02);--accent:#7dd3fc;--muted:#94a3b8}
-    *{box-sizing:border-box}
-    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#031024,#071022);color:#e6eef8;font-family:Inter,Arial;padding:20px}
-    .wrap{width:min(980px,96vw);background:var(--card);padding:18px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.6)}
-    h1{margin:0 0 8px;font-size:20px}
-    .controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-    button{border:0;padding:10px 14px;border-radius:8px;background:rgba(255,255,255,0.03);color:inherit;cursor:pointer;font-weight:700}
-    .big{background:linear-gradient(90deg, rgba(125,211,252,0.12), rgba(125,211,252,0.06));color:var(--accent)}
-    .meta{color:var(--muted);margin-bottom:10px;font-size:14px}
-    .video-wrap{position:relative;width:100%;padding-bottom:56.25%;height:0;border-radius:8px;overflow:hidden;background:#000;border:1px solid rgba(255,255,255,0.03)}
-    .video-wrap iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0}
-    .tracklist{margin-top:12px;color:var(--muted);font-size:13px;max-height:160px;overflow:auto;padding-right:6px}
-    .tracklist li{margin:6px 0}
-    .note{margin-top:12px;color:#9fb0c7;font-size:13px}
-    @media (max-width:420px){h1{font-size:18px}}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Coop Survivors — Top-down Shooter (WebRTC)</title>
+<style>
+  html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial;}
+  #ui{position:fixed;right:12px;top:12px;width:320px;background:rgba(0,0,0,0.6);color:#fff;padding:12px;border-radius:8px;z-index:100;}
+  button,input,textarea{font:inherit;margin:6px 0;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.03);color:#fff;width:100%}
+  canvas{display:block;background:#0b1020;width:100vw;height:100vh}
+  .small{font-size:12px;padding:6px}
+  #log{height:80px;overflow:auto;background:rgba(0,0,0,0.3);padding:6px;border-radius:6px;font-size:12px}
+  label{font-size:13px}
+  .row{display:flex;gap:6px}
+  .row > *{flex:1}
+</style>
 </head>
 <body>
-  <div class="wrap" role="application" aria-label="YouTube плеер Макан">
-    <h1>Плеер — MACAN (YouTube, найденные видео)</h1>
-    <div class="meta">Собраны публичные видео / плейлисты MACAN с YouTube (официальные клипы, mood-video, сборники). Нажми «Слушать» для случайного видео. Источники: YouTube канал и плейлисты.</div>
+<canvas id="game"></canvas>
 
-    <div class="controls">
-      <button id="prevBtn">◀ Предыдущий</button>
-      <button id="playRandomBtn" class="big">🔀 Слушать (рандом)</button>
-      <button id="nextBtn">Следующий ▶</button>
-      <button id="stopBtn">⏹ Стоп</button>
-    </div>
+<div id="ui">
+  <div style="font-weight:600;margin-bottom:8px">Coop Survivors — up to 4 players</div>
 
-    <div style="margin-bottom:8px"><strong id="trackTitle">—</strong></div>
-
-    <div class="video-wrap" aria-hidden="false">
-      <iframe id="ytFrame" src="about:blank" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-    </div>
-
-    <div class="note">Список видео (можно кликнуть, чтобы загрузить вручную):</div>
-    <ul class="tracklist" id="tracklist"></ul>
-
-    <div class="note" style="margin-top:10px;">
-      Примечание: я собрал публичные видео, найденные по официальному каналу и плейлистам. Это не прямые mp3-файлы — плеер использует официальные YouTube embeds.
-    </div>
+  <div>
+    <label>Имя игрока</label>
+    <input id="name" placeholder="Player" />
   </div>
 
+  <div class="row">
+    <button id="hostBtn">Создать комнату (Host)</button>
+    <button id="joinBtn">Подключиться (Join)</button>
+  </div>
+
+  <label>Сигнальные сообщения (копируй/вставляй)</label>
+  <textarea id="signalOut" placeholder="offer / answer" rows="4"></textarea>
+  <textarea id="signalIn" placeholder="Вставь сюда offer/answer" rows="4"></textarea>
+  <div class="row">
+    <button id="copyBtn" class="small">Копировать Out</button>
+    <button id="applyBtn" class="small">Применить In</button>
+  </div>
+
+  <div style="margin-top:8px">
+    <label>Статус</label>
+    <div id="log">Готов.</div>
+  </div>
+
+  <div style="margin-top:8px;font-size:12px">
+    Управление: WASD или стрелки — движение. Преференция: авто-стрельба (как в Vampire Survivors).
+  </div>
+</div>
+
 <script>
-  // ====== Список найденных видео (YouTube embed URLs) ======
-  // Источники: официальный канал MACAN и плейлисты на YouTube, найденные через поиск.
-  // Поддерживаемые видео (ID взяты из публичных видео/плейлистов):
-  const tracks = [
-    { title: "MACAN - Останься образом (Official Video)", url: "https://www.youtube.com/embed/j5cNhjG6iGs" },
-    { title: "MACAN - Май (official mood video)", url: "https://www.youtube.com/embed/VPmOMvIIWU4" },
-    { title: "MACAN - Stories (Official track)", url: "https://www.youtube.com/embed/7GcCPYVnxkI" },
-    { title: "MACAN - 2002+18 (Official track)", url: "https://www.youtube.com/embed/xww2y502YE8" },
-    { title: "MACAN - Бант (Official track)", url: "https://www.youtube.com/embed/ysGYcoyEzdQ" },
-    { title: "MACAN, Элджей — По Домам", url: "https://www.youtube.com/embed/rotHDBf2VsM" },
-    { title: "MACAN - Юг (Mood Video)", url: "https://www.youtube.com/embed/VIDEO_ID_YUG" },
-    { title: "MACAN - L (Official Music Video)", url: "https://www.youtube.com/embed/dKG2HnmM5t8" },
-    { title: "MACAN, Jakone - Поспешили", url: "https://www.youtube.com/embed/VIDEO_ID_POSPESHILI" },
-    { title: "MACAN - ASPHALT 8", url: "https://www.youtube.com/embed/VIDEO_ID_ASPHALT8" },
-    { title: "MACAN, Kiliana - Спокойной ночи", url: "https://www.youtube.com/embed/z0qHq1_KBo4" },
-    { title: "MACAN, Step - Белый (Official Music Video)", url: "https://www.youtube.com/embed/Hye7FLRkwyk" },
-    { title: "MACAN, YASMI - Jet (Official Music Video)", url: "https://www.youtube.com/embed/K1oyNY4c-IM" },
-    { title: "MACAN, Брутто - Золотые купола", url: "https://www.youtube.com/embed/FtYJbO2qw_U" },
-    { title: "MACAN & ALBLAK 52 - FLAGMAN (Official)", url: "https://www.youtube.com/embed/q7ILr-jCksA" },
-    { title: "MACAN & Три дня дождя - Здравствуй (Official)", url: "https://www.youtube.com/embed/15WpHY6ctsQ" },
-    { title: "MACAN, SALUKI - Запрещаю забывать", url: "https://www.youtube.com/embed/nSV9TgXFIjs" },
-    { title: "MACAN, Три дня дождя - Здравствуй (alternate)", url: "https://www.youtube.com/embed/zw7nk7ZgyNg" },
-    { title: "MACAN, LIL KAVKAZ - Легко ли быть молодым", url: "https://www.youtube.com/embed/zZnDmBwvDQc" },
-    { title: "MACAN, Полка, SCIRENA - Знай, знаю", url: "https://www.youtube.com/embed/hEsY5G7g9G4" },
-    { title: "MACAN - сборник / альбом BRATLAND (full)", url: "https://www.youtube.com/embed/-KynuM8Nxq4" },
-    { title: "MACAN - Премьеры и клипы (общая подборка)", url: "https://www.youtube.com/embed/pXUJdN3vsd4" },
-    { title: "MACAN - Jet (mood)", url: "https://www.youtube.com/embed/pk9otYnzT50" },
-    { title: "MACAN - (прочие найденные видео)", url: "https://www.youtube.com/embed/robWaXUJBLQ" },
-    { title: "MACAN - Прочее 1", url: "https://www.youtube.com/embed/N9bfk744bLw" },
-    { title: "MACAN - Прочее 2", url: "https://www.youtube.com/embed/NNNPR3QE1G8" },
-    { title: "MACAN & Баста - Пусть Бог будет рядом", url: "https://www.youtube.com/embed/3zqKTgzCQXI" }
-  ];
+/*
+  Coop Survivors — single file:
+  - Host runs authoritative game loop and sends 'state' messages periodically.
+  - Clients send 'input' messages to host (movement vector + name).
+  - Up to 4 players (host + 3 peers).
+  - Signaling: manual paste of offer <-> answer.
+*/
 
-  // ====== DOM ======
-  const ytFrame = document.getElementById('ytFrame');
-  const playRandomBtn = document.getElementById('playRandomBtn');
-  const nextBtn = document.getElementById('nextBtn');
-  const prevBtn = document.getElementById('prevBtn');
-  const stopBtn = document.getElementById('stopBtn');
-  const trackTitle = document.getElementById('trackTitle');
-  const tracklistEl = document.getElementById('tracklist');
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = innerWidth;
+let H = canvas.height = innerHeight;
+addEventListener('resize',()=>{W=canvas.width=innerWidth;H=canvas.height=innerHeight});
 
-  let currentIndex = -1;
+const logEl = document.getElementById('log');
+function log(...args){ logEl.textContent = new Date().toLocaleTimeString() + ' — ' + args.join(' ')+ '\n' + logEl.textContent; }
 
-  // helper: build autoplay url
-  function embedUrlWithAutoplay(baseUrl){
-    const sep = baseUrl.includes('?') ? '&' : '?';
-    return baseUrl + sep + "autoplay=1&mute=0";
-  }
+const MAX_PLAYERS = 4;
+const TICK_RATE_SEND = 100; // ms state send from host
+const TICK_RATE_SIM = 16; // ms game loop approx 60fps
 
-  // render tracklist clickable
-  function renderTracklist(){
-    tracklistEl.innerHTML = "";
-    tracks.forEach((t, i) => {
-      const li = document.createElement('li');
-      const a = document.createElement('a');
-      a.href = t.url.replace('/embed/','/watch?v=').replace('https://www.youtube.com/watch?v=','https://www.youtube.com/watch?v=');
-      a.textContent = (i+1) + ". " + t.title;
-      a.target = "_blank";
-      a.rel = "noreferrer noopener";
-      a.style.color = "inherit";
-      a.style.textDecoration = "none";
-      a.style.cursor = "pointer";
-      a.onclick = (e) => {
-        e.preventDefault();
-        loadTrack(i, true);
-      };
-      li.appendChild(a);
-      tracklistEl.appendChild(li);
-    });
-  }
+// UI
+const hostBtn = document.getElementById('hostBtn');
+const joinBtn = document.getElementById('joinBtn');
+const signalOut = document.getElementById('signalOut');
+const signalIn = document.getElementById('signalIn');
+const copyBtn = document.getElementById('copyBtn');
+const applyBtn = document.getElementById('applyBtn');
+const nameInput = document.getElementById('name');
 
-  function loadTrack(idx, autoplay=false){
-    if (!tracks.length) return;
-    idx = ((idx % tracks.length) + tracks.length) % tracks.length;
-    currentIndex = idx;
-    const t = tracks[idx];
-    trackTitle.textContent = t.title;
-    ytFrame.src = autoplay ? embedUrlWithAutoplay(t.url) : t.url;
-  }
+copyBtn.onclick = ()=>{ signalOut.select(); document.execCommand('copy'); log('Copied Out to clipboard'); }
+applyBtn.onclick = ()=>{ applyIncomingSignal(signalIn.value.trim()); }
 
-  function playRandom(){
-    if (!tracks.length) return;
-    let idx = Math.floor(Math.random() * tracks.length);
-    if (tracks.length > 1 && idx === currentIndex) idx = (idx + 1) % tracks.length;
-    loadTrack(idx, true);
-  }
+let pc = null;
+let dataChannel = null;
+let isHost = false;
+let localId = null;
+let players = {}; // id -> {x,y,angle, name, color, health}
+let inputs = {}; // local input storage for clients -> host
+let bullets = []; // host authoritative bullets
+let enemies = [];
+let lastSpawn = 0;
+let startTime = Date.now();
 
-  playRandomBtn.addEventListener('click', playRandom);
-  nextBtn.addEventListener('click', () => loadTrack(currentIndex + 1, true));
-  prevBtn.addEventListener('click', () => loadTrack(currentIndex - 1, true));
-  stopBtn.addEventListener('click', () => {
-    ytFrame.src = "about:blank";
-    trackTitle.textContent = "—";
-    currentIndex = -1;
+const colors = ['#e74c3c','#3498db','#2ecc71','#f1c40f'];
+
+// --- simple game math ---
+function rand(min,max){return Math.random()*(max-min)+min;}
+function now(){return Date.now();}
+
+// --- Networking: manual signal exchange ---
+async function createPeerConnection() {
+  pc = new RTCPeerConnection({
+    iceServers: [{urls:"stun:stun.l.google.com:19302"}]
   });
+  pc.onicecandidate = e => {
+    if(e.candidate) return;
+    // when gathering finished, localDescription contains full SDP
+    // we'll put it into signalOut (host or client depending)
+    signalOut.value = JSON.stringify(pc.localDescription);
+    log('SDP ready (put this to remote).');
+  };
+  pc.onconnectionstatechange = ()=> log('PC state: '+pc.connectionState);
+  return pc;
+}
 
-  // init
-  renderTracklist();
-  if (tracks.length) loadTrack(0, false);
+async function hostCreate() {
+  if(pc) { log('Already initialized'); return; }
+  isHost = true;
+  await createPeerConnection();
 
-  // Accessibility: space toggles play/pause by reloading same url with autoplay toggle (best-effort)
-  window.addEventListener('keydown', (e) => {
-    if (e.key === ' '){
-      e.preventDefault();
-      if (currentIndex === -1) loadTrack(0, true);
-      else {
-        // simple toggle: if iframe has src with autoplay, clear; else reload with autoplay
-        if (ytFrame.src.includes('autoplay=1')) ytFrame.src = "about:blank";
-        else ytFrame.src = embedUrlWithAutoplay(tracks[currentIndex].url);
-      }
+  // host creates a single datachannel for each future peer by listening to ondatachannel when clients connect via answer ->
+  // BUT callers often create channel on host side. We'll create a "control" channel on host by creating one now and re-create per peer when client creates one.
+  // To keep it simple: host waits on ondatachannel:
+  pc.ondatachannel = (event) => {
+    const ch = event.channel;
+    setupDataChannel(ch, true);
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  log('Offer created. Share offer (signalOut) with peers.');
+  signalOut.value = JSON.stringify(pc.localDescription);
+}
+
+async function joinCreate() {
+  if(pc) { log('Already initialized'); return; }
+  isHost = false;
+  await createPeerConnection();
+
+  // client creates data channel and offers it to host
+  dataChannel = pc.createDataChannel('game');
+  setupDataChannel(dataChannel, false);
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  signalOut.value = JSON.stringify(pc.localDescription);
+  log('Client offer created. Paste to host; then paste answer back into "In".');
+}
+
+async function applyIncomingSignal(text) {
+  if(!text) { log('Пустой вход.'); return; }
+  let obj;
+  try { obj = JSON.parse(text); } catch(e){ log('Invalid JSON'); return; }
+  if(!pc) {
+    // if incoming is an offer and we're host -> create host and set remote then answer
+    if(obj.type === 'offer') {
+      // we are host receiving offer from a client
+      isHost = true;
+      await createPeerConnection();
+      // for host we will wait for remote datachannel (client created it)
+      pc.ondatachannel = (event) => {
+        const ch = event.channel;
+        setupDataChannel(ch, true);
+      };
+      await pc.setRemoteDescription(obj);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      signalOut.value = JSON.stringify(pc.localDescription);
+      log('Host: Answer created. Send this back to joining client.');
+      return;
+    } else {
+      log('No peer connection and incoming is not an offer. If you are joining, press Join first.');
+      return;
+    }
+  }
+
+  // else pc exists -> set remote desc
+  try {
+    await pc.setRemoteDescription(obj);
+    log('Remote description applied.');
+  } catch(e){
+    log('Ошибка при применении remoteDescription: ' + e);
+  }
+}
+
+function setupDataChannel(ch, onHostSide) {
+  ch.onopen = ()=> {
+    log('DataChannel open. Role: ' + (isHost ? 'HOST' : 'CLIENT'));
+    if(!isHost) {
+      // client sends join request with name
+      const payload = {type:'join', name: nameInput.value || 'Player'};
+      ch.send(JSON.stringify(payload));
+      log('Sent join request.');
+    } else {
+      log('Host channel opened from client.');
+    }
+  };
+  ch.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data);
+      handleMessage(msg, ch);
+    } catch(e){ console.warn('bad msg', ev.data); }
+  };
+  ch.onclose = ()=> log('Channel closed.');
+  ch.onerror = (e)=> console.warn('ch err', e);
+
+  // if this is the client side (we created channel), keep reference to send inputs
+  if(!isHost) dataChannel = ch;
+}
+
+// --- message protocol ---
+// client -> host:
+//   {type:'join', name}
+//   {type:'input', id, input:{up,down,left,right, mx,my}}  // mx/my for mouse or pointer aim (not used now)
+// host -> client:
+//   {type:'assign', id, colorIndex, players: {...}} // id assigned
+//   {type:'state', t: timestamp, players:{...}, bullets: [...], enemies:[...]}  // periodic full state
+
+async function handleMessage(msg, ch) {
+  if(msg.type === 'join' && isHost) {
+    // new client wants to join
+    const newId = Object.keys(players).length + 1; // host will be 0
+    if(newId >= MAX_PLAYERS) {
+      ch.send(JSON.stringify({type:'reject', reason:'room full'}));
+      log('Reject join: room full');
+      return;
+    }
+    const assignedId = newId; // e.g., 1..3 for clients, host will be 0
+    ch._remoteId = assignedId; // store locally
+    // create player slot
+    players[assignedId] = {
+      id: assignedId, x: W/2 + rand(-80,80), y: H/2 + rand(-80,80),
+      angle:0, name:msg.name||('Player'+assignedId), color: colors[assignedId % colors.length], health:100
+    };
+    ch.send(JSON.stringify({type:'assign', id:assignedId, colorIndex: assignedId % colors.length}));
+    log('Assigned id',assignedId, 'to', msg.name);
+    // broadcast later via state
+    return;
+  }
+
+  if(msg.type === 'input' && isHost) {
+    // host receives input from client
+    const id = msg.id;
+    if(!players[id]) return;
+    players[id].input = msg.input;
+    players[id].lastInputAt = now();
+    return;
+  }
+
+  if(!isHost) {
+    // client side messages from host
+    if(msg.type === 'assign') {
+      localId = msg.id;
+      log('Assigned id ' + localId);
+    }
+    if(msg.type === 'state') {
+      // apply snapshot (simple interpolation-less apply)
+      applyState(msg);
+    }
+  }
+}
+
+function applyState(stateMsg) {
+  // replace local view of players/enemies/bullets
+  players = {};
+  stateMsg.players.forEach(p=>{
+    players[p.id] = p;
+  });
+  bullets = stateMsg.bullets || [];
+  enemies = stateMsg.enemies || [];
+}
+
+// --- Game logic (host authoritative) ---
+function hostInit() {
+  // host is player 0
+  players = {};
+  players[0] = {id:0, x:W/2, y:H/2, angle:0, name: nameInput.value || 'Host', color: colors[0], health:100, input:{}};
+  bullets = [];
+  enemies = [];
+  lastSpawn = now();
+  startTime = now();
+
+  // host will periodically broadcast state to all open datachannels (pc.getReceivers not available for DCs)
+  // We'll keep track of datachannels in pc._channels array:
+  pc._channels = pc._channels || [];
+  // Add event to capture newly opened channels
+  pc.ondatachannel = (e) => {
+    const ch = e.channel;
+    pc._channels.push(ch);
+    setupDataChannel(ch, true);
+  };
+
+  // If pc was created by host creating answer earlier (when responding to join offers) the ondatachannel should have handled
+  setInterval(()=> {
+    // create state snapshot
+    const snap = {
+      type:'state',
+      t:now(),
+      players: Object.values(players),
+      bullets: bullets,
+      enemies: enemies
+    };
+    const s = JSON.stringify(snap);
+    // broadcast to all open datachannels
+    (pc._channels||[]).forEach(ch => { if(ch.readyState==='open') ch.send(s); });
+  }, TICK_RATE_SEND);
+}
+
+// spawn enemy
+function spawnEnemy() {
+  const side = Math.floor(rand(0,4));
+  let x=0,y=0;
+  if(side===0){x=rand(0,W);y=-20}
+  if(side===1){x=W+20;y=rand(0,H)}
+  if(side===2){x=rand(0,W);y=H+20}
+  if(side===3){x=-20;y=rand(0,H)}
+  enemies.push({id: 'e'+now()+Math.random(), x,y, hp:10, spd: 0.6+Math.random()*0.8});
+}
+
+// host update
+function hostUpdate(dt) {
+  // spawn
+  if(now() - lastSpawn > 900) { spawnEnemy(); lastSpawn = now(); }
+  // update players (apply inputs)
+  Object.values(players).forEach(pl=>{
+    const inp = pl.input || {};
+    const speed = 120 * (dt/1000);
+    if(inp.left) pl.x -= speed;
+    if(inp.right) pl.x += speed;
+    if(inp.up) pl.y -= speed;
+    if(inp.down) pl.y += speed;
+    // clamp
+    pl.x = Math.max(20, Math.min(W-20, pl.x));
+    pl.y = Math.max(20, Math.min(H-20, pl.y));
+    // auto-fire: spawn bullets outward in a spread (simple)
+    if(!pl._fireCooldown) pl._fireCooldown = 0;
+    pl._fireCooldown -= dt;
+    if(pl._fireCooldown <= 0) {
+      // spawn bullet aimed randomly (or towards center)
+      const angle = Math.random()*Math.PI*2;
+      bullets.push({x:pl.x, y:pl.y, vx: Math.cos(angle)*3, vy: Math.sin(angle)*3, life:2000, owner:pl.id});
+      pl._fireCooldown = 200; // ms between bursts
     }
   });
+
+  // update bullets
+  const nowt = now();
+  bullets.forEach(b=>{
+    b.x += b.vx * (dt/16);
+    b.y += b.vy * (dt/16);
+    b.life -= dt;
+  });
+  bullets = bullets.filter(b=> b.life > 0 && b.x>-50 && b.x<W+50 && b.y>-50 && b.y<H+50);
+
+  // update enemies move toward nearest player
+  enemies.forEach(en=>{
+    // find nearest player
+    let nearest = null, nd=1e9;
+    Object.values(players).forEach(p=>{
+      const dx = p.x - en.x, dy = p.y - en.y;
+      const d = Math.hypot(dx,dy);
+      if(d < nd){nd = d; nearest = p;}
+    });
+    if(nearest){
+      const dx = nearest.x - en.x, dy = nearest.y - en.y;
+      const len = Math.hypot(dx,dy) || 1;
+      en.x += (dx/len) * en.spd * (dt/16);
+      en.y += (dy/len) * en.spd * (dt/16);
+    }
+    // collisions with bullets
+    bullets.forEach(b=>{
+      const d = Math.hypot(b.x - en.x, b.y - en.y);
+      if(d < 14){ en.hp -= 5; b.life = 0; }
+    });
+  });
+  enemies = enemies.filter(e=> e.hp>0);
+}
+
+// render loop (both host and client)
+function render() {
+  ctx.clearRect(0,0,W,H);
+  // background grid
+  ctx.fillStyle = '#071024';
+  ctx.fillRect(0,0,W,H);
+
+  // draw enemies
+  enemies.forEach(e=>{
+    ctx.beginPath();
+    ctx.fillStyle = '#9b59b6';
+    ctx.arc(e.x,e.y,12,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  // draw bullets
+  bullets.forEach(b=>{
+    ctx.beginPath();
+    ctx.fillStyle = '#fff';
+    ctx.arc(b.x,b.y,3,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  // draw players
+  Object.values(players).forEach(p=>{
+    ctx.beginPath();
+    ctx.fillStyle = p.color || '#fff';
+    ctx.arc(p.x,p.y,14,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(p.name || ('P'+p.id), p.x - 18, p.y - 18);
+  });
+
+  requestAnimationFrame(render);
+}
+
+// client input capture
+const keys = {};
+addEventListener('keydown',(e)=>{ keys[e.key.toLowerCase()] = true; });
+addEventListener('keyup',(e)=>{ keys[e.key.toLowerCase()] = false; });
+
+// send local input to host
+setInterval(()=>{
+  if(!dataChannel || dataChannel.readyState!=='open') return;
+  if(isHost) return;
+  const input = {
+    up: keys['w']||keys['arrowup'],
+    down: keys['s']||keys['arrowdown'],
+    left: keys['a']||keys['arrowleft'],
+    right: keys['d']||keys['arrowright']
+  };
+  const msg = {type:'input', id: localId, input};
+  dataChannel.send(JSON.stringify(msg));
+}, 50);
+
+// host game tick
+let lastTick = now();
+setInterval(()=>{
+  const t = now();
+  const dt = t - lastTick;
+  lastTick = t;
+  if(isHost) {
+    hostUpdate(dt);
+  } else {
+    // client-side simple interpolation could be added; currently display state sent by host
+  }
+}, TICK_RATE_SIM);
+
+// rendering
+requestAnimationFrame(render);
+
+// UI Buttons
+hostBtn.onclick = async ()=> {
+  await hostCreate();
+  log('Создан PC (host). Ждём подключений. Когда клиент пришлёт offer, вставь его в In и нажми Apply.');
+  hostInit();
+};
+
+joinBtn.onclick = async ()=> {
+  await joinCreate();
+  log('Создан клиентский PC. Скопируй offer и отправь хосту; затем хост должен вернуть answer и ты вставишь его в In и нажмёшь Apply.');
+};
+
+// helper to apply manual in (handled above)
+// applyBtn.onclick set earlier
+
+// small safety: warn about page unload
+addEventListener('beforeunload',(e)=>{
+  if(pc) e.returnValue = 'Есть активное соединение. Уйти?';
+});
 </script>
 </body>
 </html>
